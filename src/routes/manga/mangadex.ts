@@ -1,5 +1,7 @@
 import { FastifyRequest, FastifyReply, FastifyInstance, RegisterOptions } from 'fastify';
 import { MANGA } from '@consumet/extensions';
+import { Chapter, Manga } from 'mangadex-full-api';
+import axios from 'axios';
 
 const routes = async (fastify: FastifyInstance, options: RegisterOptions) => {
   const mangadex = new MANGA.MangaDex();
@@ -16,9 +18,12 @@ const routes = async (fastify: FastifyInstance, options: RegisterOptions) => {
   fastify.get('/:query', async (request: FastifyRequest, reply: FastifyReply) => {
     const query = (request.params as { query: string }).query;
 
-    const page = (request.query as { page: number }).page;
-
-    const res = await mangadex.search(query, page);
+    const res = await Manga.search({
+      title: query,
+      limit: 10,
+      hasAvailableChapters: true,
+      includes: ['cover_art'],
+    });
 
     reply.status(200).send(res);
   });
@@ -27,9 +32,57 @@ const routes = async (fastify: FastifyInstance, options: RegisterOptions) => {
     const id = decodeURIComponent((request.params as { id: string }).id);
 
     try {
-      const res = await mangadex
-        .fetchMangaInfo(id)
-        .catch((err) => reply.status(404).send({ message: err }));
+      const res = await Manga.get(id);
+
+      reply.status(200).send(res);
+    } catch (err) {
+      reply
+        .status(500)
+        .send({ message: 'Something went wrong. Please try again later.' });
+    }
+  });
+
+  fastify.get('/read/:mangaId', async (request: FastifyRequest, reply: FastifyReply) => {
+    const mangaId = (request.params as { mangaId: string }).mangaId;
+
+    try {
+      const manga = await Manga.get(mangaId);
+      const chapters = await manga.getFeed({
+        limit: 500,
+        translatedLanguage: ['en'],
+        order: {
+          createdAt: 'desc',
+        },
+        includes: ['manga'],
+      });
+
+      const latestChapters = chapters.reduce(
+        (acc, current) => {
+          const chapterName = current.chapter ?? '';
+
+          if (
+            !acc.hasOwnProperty(chapterName) ||
+            new Date(acc[chapterName].updatedAt) < new Date(current.updatedAt)
+          ) {
+            acc[chapterName] = current;
+          }
+
+          return acc;
+        },
+        {} as Record<string, (typeof chapters)[0]>,
+      );
+
+      const res = Object.values(latestChapters);
+
+      res.sort((a, b) => {
+        const [aMain, aFraction = '0'] = a.chapter?.split('.').map(Number) ?? [];
+        const [bMain, bFraction = '0'] = b.chapter?.split('.').map(Number) ?? [];
+
+        if (aMain !== bMain) {
+          return bMain - aMain;
+        }
+        return Number(bFraction) - Number(aFraction);
+      });
 
       reply.status(200).send(res);
     } catch (err) {
@@ -40,14 +93,15 @@ const routes = async (fastify: FastifyInstance, options: RegisterOptions) => {
   });
 
   fastify.get(
-    '/read/:chapterId',
+    '/chapter/:chapterId',
     async (request: FastifyRequest, reply: FastifyReply) => {
       const chapterId = (request.params as { chapterId: string }).chapterId;
 
       try {
-        const res = await mangadex.fetchChapterPages(chapterId);
+        const chapter = await Chapter.get(chapterId);
+        const pages = await chapter.getReadablePages();
 
-        reply.status(200).send(res);
+        reply.status(200).send({ chapter, pages });
       } catch (err) {
         reply
           .status(500)
