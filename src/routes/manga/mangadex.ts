@@ -142,6 +142,12 @@ const routes = async (fastify: FastifyInstance, options: RegisterOptions) => {
         const chapter = await Chapter.get(chapterId);
         const pages = await chapter.getReadablePages();
 
+        if (chapter.manga) {
+          const manga = await chapter.manga.resolve();
+          // Using a type assertion to add the new property dynamically
+          (chapter as Record<string, any>).mangaResolved = manga;
+        }
+
         reply.status(200).send({ chapter, pages });
       } catch (err) {
         reply
