@@ -57,6 +57,24 @@ const routes = async (fastify: FastifyInstance, options: RegisterOptions) => {
     try {
       const res = await Manga.get(id);
 
+      if (res.mainCover) {
+        const cover = await res.mainCover.resolve();
+        // Using a type assertion to add the new property dynamically
+        (res as Record<string, any>).mainCoverResolved = cover;
+      }
+
+      if (res.authors) {
+        const authors = await Promise.all(
+          res.authors.map(async (author) => {
+            const authorDetails = await author.resolve();
+            return authorDetails;
+          }),
+        );
+
+        // Using a type assertion to add the new property dynamically
+        (res as Record<string, any>).authorsResolved = authors;
+      }
+
       reply.status(200).send(res);
     } catch (err) {
       reply
