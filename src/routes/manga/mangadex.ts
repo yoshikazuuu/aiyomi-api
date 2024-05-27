@@ -10,7 +10,7 @@ const routes = async (fastify: FastifyInstance, options: RegisterOptions) => {
     rp.status(200).send({
       intro:
         "Welcome to the mangadex provider: check out the provider's website @ https://mangadex.org/",
-      routes: ['/:query', '/info/:id', '/read/:chapterId'],
+      routes: ['/:query', '/info/:id', '/read/:chapterId', '/chapter/:chapterId'],
       documentation: 'https://docs.consumet.org/#tag/mangadex',
     });
   });
@@ -25,7 +25,30 @@ const routes = async (fastify: FastifyInstance, options: RegisterOptions) => {
       includes: ['cover_art'],
     });
 
-    reply.status(200).send(res);
+    const enhancedMangaList = await Promise.all(
+      res.map(async (manga) => {
+        if (manga.mainCover) {
+          const cover = await manga.mainCover.resolve();
+          // Using a type assertion to add the new property dynamically
+          (manga as Record<string, any>).mainCoverResolved = cover;
+        }
+
+        if (manga.authors) {
+          const authors = await Promise.all(
+            manga.authors.map(async (author) => {
+              const authorDetails = await author.resolve();
+              return authorDetails;
+            }),
+          );
+
+          // Using a type assertion to add the new property dynamically
+          (manga as Record<string, any>).authorsResolved = authors;
+        }
+        return manga;
+      }),
+    );
+
+    reply.status(200).send(enhancedMangaList);
   });
 
   fastify.get('/info/:id', async (request: FastifyRequest, reply: FastifyReply) => {
