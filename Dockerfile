@@ -4,7 +4,7 @@ LABEL version="1.0.0"
 LABEL description="Consumet API (fastify) Docker Image"
 
 # update packages, to reduce risk of vulnerabilities
-RUN apt-get update && apt-get upgrade -y && apt-get autoclean -y && apt-get autoremove -y
+RUN apt-get update && apt-get upgrade -y && apt-get autoclean -y && apt-get autoremove -y && apt-get install -y curl
 
 # set a non privileged user to use when running this image
 RUN groupadd -r nodejs && useradd -g nodejs -s /bin/bash -d /home/nodejs -m nodejs
