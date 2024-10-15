@@ -131,6 +131,7 @@ export const tmdbApi = process.env.TMDB_KEY && process.env.TMDB_KEY;
       chalk.yellowBright('TMDB api key not found. the TMDB meta route may not work.'),
     );
 
+  await fastify.register(require('fastify-healthcheck'))
   await fastify.register(books, { prefix: '/books' });
   await fastify.register(anime, { prefix: '/anime' });
   await fastify.register(manga, { prefix: '/manga' });
